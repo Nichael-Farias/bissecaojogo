@@ -2,31 +2,22 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer } from "recharts";
-import { Check, X, CircleMinus, CirclePlus } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
-// Types for our game state
-interface GameState {
-  currentLevel: number;
-  attempts: number;
-  score: number;
-}
+// Types
+import { GameState, FunctionProblem, Iteration, ChartPoint } from "@/types/bisection-game";
 
-// Type for a function to solve
-interface FunctionProblem {
-  fn: (x: number) => number;
-  expression: string;
-  lowerBound: number;
-  upperBound: number;
-  solution: number;
-  maxIterations: number;
-}
+// Utils
+import { problems, generateChartData, formatNumber } from "@/utils/bisection-utils";
+
+// Components
+import FunctionChart from "@/components/bisection/FunctionChart";
+import IterationsTable from "@/components/bisection/IterationsTable";
+import MidpointSelection from "@/components/bisection/MidpointSelection";
+import HelpSection from "@/components/bisection/HelpSection";
+import GameComplete from "@/components/bisection/GameComplete";
 
 const BisectionGame = () => {
   // Game state
@@ -40,41 +31,12 @@ const BisectionGame = () => {
   const [lowerBound, setLowerBound] = useState<number>(0);
   const [upperBound, setUpperBound] = useState<number>(0);
   const [midpoint, setMidpoint] = useState<number | null>(null);
-  const [iterations, setIterations] = useState<Array<{lowerBound: number, upperBound: number, midpoint: number, fMid: number}>>([]);
+  const [iterations, setIterations] = useState<Iteration[]>([]);
   const [gameComplete, setGameComplete] = useState<boolean>(false);
   const [showHelp, setShowHelp] = useState<boolean>(false);
   
   // Chart data
-  const [chartData, setChartData] = useState<Array<{x: number, y: number}>>([]);
-  
-  // Available problems
-  const problems: FunctionProblem[] = [
-    {
-      fn: (x) => x * x - 4,
-      expression: "f(x) = x² - 4",
-      lowerBound: 0,
-      upperBound: 3,
-      solution: 2,
-      maxIterations: 5,
-    },
-    {
-      fn: (x) => Math.sin(x),
-      expression: "f(x) = sin(x)",
-      lowerBound: 2.5,
-      upperBound: 4,
-      solution: Math.PI,
-      maxIterations: 6,
-    },
-    {
-      fn: (x) => x * x * x - x - 2,
-      expression: "f(x) = x³ - x - 2",
-      lowerBound: 1,
-      upperBound: 2,
-      solution: 1.521,
-      maxIterations: 7,
-    }
-  ];
-  
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [currentProblem, setCurrentProblem] = useState<FunctionProblem>(problems[0]);
   
   // Initialize the game
@@ -85,26 +47,9 @@ const BisectionGame = () => {
   // Generate chart data whenever the problem changes
   useEffect(() => {
     if (currentProblem) {
-      generateChartData();
+      setChartData(generateChartData(currentProblem));
     }
   }, [currentProblem]);
-  
-  // Generate points for the chart
-  const generateChartData = () => {
-    const { lowerBound, upperBound, fn } = currentProblem;
-    const range = upperBound - lowerBound;
-    const step = range / 50;
-    
-    const data = [];
-    for (let x = lowerBound - range * 0.2; x <= upperBound + range * 0.2; x += step) {
-      data.push({
-        x: Number(x.toFixed(2)),
-        y: Number(fn(x).toFixed(4))
-      });
-    }
-    
-    setChartData(data);
-  };
   
   // Start a new level
   const startLevel = (level: number) => {
@@ -195,9 +140,10 @@ const BisectionGame = () => {
     startLevel(gameState.currentLevel);
   };
   
-  // Format number for display
-  const formatNumber = (num: number) => {
-    return num.toFixed(4);
+  // Restart the game
+  const restartGame = () => {
+    setGameComplete(false);
+    startLevel(1);
   };
 
   return (
@@ -205,25 +151,7 @@ const BisectionGame = () => {
       <h1 className="text-3xl font-bold text-center mb-6">Jogo da Bisseção</h1>
       
       {gameComplete ? (
-        <Card className="mb-8 animate-fade-in">
-          <CardHeader>
-            <CardTitle>Jogo Completo!</CardTitle>
-            <CardDescription>
-              Parabéns! Você completou todos os níveis do jogo da bisseção.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg">Pontuação final: {gameState.score}</p>
-          </CardContent>
-          <CardFooter>
-            <Button onClick={() => {
-              setGameComplete(false);
-              startLevel(1);
-            }}>
-              Jogar Novamente
-            </Button>
-          </CardFooter>
-        </Card>
+        <GameComplete score={gameState.score} onRestart={restartGame} />
       ) : (
         <>
           <div className="flex justify-between items-center mb-6">
@@ -238,20 +166,7 @@ const BisectionGame = () => {
             </div>
           </div>
           
-          {showHelp && (
-            <Alert className="mb-4 animate-fade-in">
-              <AlertTitle>Como jogar</AlertTitle>
-              <AlertDescription>
-                <p className="mb-2">O método da bisseção encontra raízes de funções dividindo o intervalo ao meio repetidamente.</p>
-                <ol className="list-decimal pl-5 space-y-1">
-                  <li>Observe o gráfico para entender o comportamento da função.</li>
-                  <li>Clique em "Calcular Ponto Médio" para encontrar o ponto médio.</li>
-                  <li>Escolha o subintervalo que contém a raiz (onde f(x) muda de sinal).</li>
-                  <li>Continue até encontrar a aproximação da raiz.</li>
-                </ol>
-              </AlertDescription>
-            </Alert>
-          )}
+          {showHelp && <HelpSection />}
           
           <Card className="mb-8">
             <CardHeader>
@@ -261,45 +176,7 @@ const BisectionGame = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-64 mb-6">
-                <ChartContainer
-                  config={{
-                    line: { theme: { light: "#2563eb", dark: "#3b82f6" } },
-                    xAxis: { theme: { light: "#94a3b8", dark: "#64748b" } },
-                    yAxis: { theme: { light: "#94a3b8", dark: "#64748b" } },
-                    grid: { theme: { light: "#e2e8f0", dark: "#334155" } }
-                  }}
-                >
-                  <ResponsiveContainer>
-                    <Line
-                      data={chartData}
-                      dataKey="y"
-                      name="f(x)"
-                      type="monotone"
-                      stroke="var(--color-line)"
-                      dot={false}
-                      isAnimationActive={true}
-                    >
-                      <CartesianGrid stroke="var(--color-grid)" />
-                      <XAxis 
-                        dataKey="x"
-                        type="number"
-                        domain={['dataMin', 'dataMax']}
-                        label={{ value: 'x', position: 'insideBottomRight', offset: -5 }}
-                        stroke="var(--color-xAxis)"
-                      />
-                      <YAxis 
-                        label={{ value: 'f(x)', angle: -90, position: 'insideLeft' }}
-                        stroke="var(--color-yAxis)"
-                      />
-                      <ReferenceLine y={0} stroke="#888" />
-                      <ChartTooltip
-                        content={<ChartTooltipContent />}
-                      />
-                    </Line>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </div>
+              <FunctionChart chartData={chartData} />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
@@ -329,59 +206,19 @@ const BisectionGame = () => {
               </div>
               
               {midpoint !== null && (
-                <div className="mb-6 p-4 bg-secondary/20 rounded-md">
-                  <h3 className="font-semibold mb-2">Ponto Médio: {formatNumber(midpoint)}</h3>
-                  <p>f({formatNumber(midpoint)}) = {formatNumber(currentProblem.fn(midpoint))}</p>
-                  <div className="flex gap-3 mt-4">
-                    <Button 
-                      onClick={() => selectNewInterval(true)}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      <CircleMinus className="mr-2" />
-                      Escolher [{formatNumber(lowerBound)}, {formatNumber(midpoint)}]
-                    </Button>
-                    <Button 
-                      onClick={() => selectNewInterval(false)}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      <CirclePlus className="mr-2" />
-                      Escolher [{formatNumber(midpoint)}, {formatNumber(upperBound)}]
-                    </Button>
-                  </div>
-                </div>
+                <MidpointSelection 
+                  midpoint={midpoint}
+                  lowerBound={lowerBound}
+                  upperBound={upperBound}
+                  fMid={currentProblem.fn(midpoint)}
+                  onSelectInterval={selectNewInterval}
+                />
               )}
               
-              {iterations.length > 0 && (
-                <div className="overflow-auto mb-6">
-                  <h3 className="font-semibold mb-2">Histórico ({iterations.length}/{currentProblem.maxIterations} iterações)</h3>
-                  <table className="w-full min-w-[500px] border-collapse">
-                    <thead>
-                      <tr className="bg-secondary/30">
-                        <th className="p-2 text-left">Iteração</th>
-                        <th className="p-2 text-left">a</th>
-                        <th className="p-2 text-left">b</th>
-                        <th className="p-2 text-left">m</th>
-                        <th className="p-2 text-left">f(m)</th>
-                        <th className="p-2 text-left">|b-a|</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {iterations.map((iter, idx) => (
-                        <tr key={idx} className={idx % 2 ? "bg-secondary/10" : ""}>
-                          <td className="p-2">{idx + 1}</td>
-                          <td className="p-2">{formatNumber(iter.lowerBound)}</td>
-                          <td className="p-2">{formatNumber(iter.upperBound)}</td>
-                          <td className="p-2">{formatNumber(iter.midpoint)}</td>
-                          <td className="p-2">{formatNumber(iter.fMid)}</td>
-                          <td className="p-2">{formatNumber(Math.abs(iter.upperBound - iter.lowerBound))}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <IterationsTable 
+                iterations={iterations} 
+                maxIterations={currentProblem.maxIterations} 
+              />
             </CardContent>
             <CardFooter className="flex flex-wrap gap-2">
               <Button
