@@ -1,0 +1,30 @@
+
+{
+  "appId": "com.bissecao.jogo",
+  "productName": "Jogo da Bisseção",
+  "directories": {
+    "output": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*"
+  ],
+  "win": {
+    "target": [
+      "nsis"
+    ],
+    "icon": "public/favicon.ico"
+  },
+  "mac": {
+    "target": [
+      "dmg"
+    ],
+    "icon": "public/favicon.ico"
+  },
+  "linux": {
+    "target": [
+      "AppImage"
+    ],
+    "icon": "public/favicon.ico"
+  }
+}

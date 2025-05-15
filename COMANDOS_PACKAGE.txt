@@ -1,0 +1,5 @@
+
+Adicione os seguintes comandos ao seu package.json na seção "scripts":
+
+"electron:dev": "concurrently \"cross-env IS_DEV=true vite\" \"electron electron/main.js\"",
+"electron:build": "vite build && electron-builder build --config electron-builder.json"
